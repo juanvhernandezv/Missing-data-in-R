@@ -17,12 +17,13 @@ editor_options:
   chunk_output_type: console
 ---
 
-Se utiliza la función _purl_ que permite agrupar todo el código para ser presentado
+The _purl_ function allows grouping all the code to be presented in a PDF o similar
+
 ```{r purl = F}
 #purl("TFM.Rmd", output = "codigo.R")
 ```
 
-```{r Librerias, warning=FALSE, message=FALSE}
+```{r Libraries, warning=FALSE, message=FALSE}
 library(dplyr)
 library(knitr)
 library(naniar)
@@ -36,9 +37,8 @@ library(EnvStats)
 library(coin)
 ```
 
-Antes de empezar, se asignan las opciones del código
-```{r opciones}
-# Definimos los parámetros para los chunks del código.
+```{r options}
+# Code parameters
 options(max.print="75")
 opts_chunk$set(echo=TRUE,
 	             cache=FALSE,
@@ -51,52 +51,37 @@ opts_chunk$set(echo=TRUE,
 opts_knit$set(width=75)
 ```
 
-# Creación de las bases de datos
+# Database
 
-## Análisis descriptivo y depuración de la base de datos 
+## Descriptive analysis
 
-Se carga la base de datos con la que se va a trabajar
-```{r carga de datos}
+Upload the data. The following data comes from DOI: 10.1016/j.antiviral.2009.11.008
+```{r Upload}
 vih <- data.frame(read.csv(params$file, sep = ";", dec = ","))
-#Dimensiones de la base de datos original
+#Dimensions
 dim(vih) 
 ```
-Consiste en una base de datos de `r dim(vih)[1]` observaciones/pacientes y `r dim(vih)[2]` variables.
+Database with `r dim(vih)[1]` observations/rows, and `r dim(vih)[2]` variables.
 
-Se selecciona únicamente las variables relevantes al estudio de VIH.
-```{r Obtención de variables}
-# Seleccionamos las variables de interés 
+I choose only those relevant variables for the study.
+```{r}
+# Variable selection
 VIH <- select(vih, Grupo,sexo,edad,tpo_vih_meses,factor_riesgo_total,starts_with("CD4A"),
               starts_with("CargaV"))
-# Transformamos en factores las variables categóricas 
+# Variable conversion to factor
 cols <- c("Grupo","sexo", "factor_riesgo_total")
 VIH[cols] <- lapply(VIH[cols], factor)
-# Asignación de niveles de cada factor
+# Factor levels
 levels(VIH$Grupo) <-  c("EFV", "LVP/r")
 levels(VIH$sexo)  <- c("Masculino", "Femenino")
 levels(VIH$factor_riesgo_total) <- c("ADVP","Heterosexual","Homosexual","Otros")
-# Transformación variables CargaViral_ a log10(x+1)
+# Using log10(x+1) to transform "CargaViral_" variable
 VIH[11:15] <- VIH %>% select(starts_with("CargaV")) %>% +1 %>%  log10()
-# Descarte de un outlier
-VIH[60,"CD4A_12"] <- NA
 ```
 
-A continuación una breve descripción de las variables escogidas
-
-| Variable 	| Tipo 	| Descripción 	|
-|:---:	|:---:	|:---:	|
-| Grupo 	| Categórica 	| Binaria (EFV / LVP/r) 	|
-| Sexo 	| Categórica 	| Binaria (Masculino / Femenino) 	|
-| Edad 	| Numérica 	| por año 	|
-| tpo_vih_meses 	| Numérica 	| Tiempo desde el contagio (mes) 	|
-| factor_riesgo_total 	| Categórica 	| 4 categorías de factor de riesgo 	|
-| DC4A_ 	| Numérica 	| Temporal (0,12,24,36,48 semanas) 	|
-| CargaViral_ 	| Numérica 	| Temporal (0,12,24,36,48 semanas) 	|
-
-```{r Estructura VIH}
-# Estructura de la base de datos y la clase de cada variable
+```{r VIH estructure}
 str(VIH)
-# Gráfico estructura de datos y missings
+# Data and missing estructure plot
 vis_dat(VIH) + ylab("Observaciones") + guides(fill = guide_legend(title = "Tipo")) +
   scale_fill_hue(labels = c("Factor", "Entero", "Numérico")) + 
   theme(axis.text = element_text(size = 15),
@@ -105,12 +90,13 @@ vis_dat(VIH) + ylab("Observaciones") + guides(fill = guide_legend(title = "Tipo"
         legend.text=element_text(size=15)) 
 ```
 
-```{r Resumen VIH}
-# Resumen estadístico de la base de datos
+```{r VIH summary}
+
+# Statistic summary 
 summary(VIH)
-# Proporciones entre grupo y sexo
+# Proportions
 prop.table(table(VIH$Grupo,VIH$sexo))
-#Proporción por factor de riesgo
+
 prop.table(table(VIH$factor_riesgo_total))
 ```
 
@@ -124,24 +110,25 @@ VIH %>% select(starts_with("CargaViral")) %>% boxplot(col = "orange", las = 0)
 par(mfrow = c(2,5))
 VIH[-c(1:5)] %>% apply(2,qqPlot) 
 ```
+## Database sizes
 
+Now, I proceed to get two database size, N/2 y N/3, where N is the original size (from VIH database). It is considered to maintain the same group proportions.
 
-## Creación de los escenarios de estudio
-
-A continuación se procede a obtener las bases de datos al azar de tamaño N/2 y N/3, donde N es el tamaño de la base de datos original. Se considera mantener las proporciones de pacientes de cada grupo de estudio.
-```{r Base de datos}
-# Generar de las bases de datos N/2 y N/3
-# Se fija la semilla
+```{r Databases}
+#  N/2 and N/3 databases
+# Set a seed
 set.seed(545)
-# La función slice_sample requiere el número de filas por grupo
-# Se obtiene la mitad de las filas originales
+# slice_sample function require the row numbers for each group
+
+#N/2
 VIH2 <- ungroup(VIH %>% group_by(Grupo) %>% slice_sample(n = nrow(VIH)/4))
-# Se obtiene un tercio de las filas de la base original
+#N/3
 VIH3 <- ungroup(VIH %>% group_by(Grupo) %>% slice_sample(n = nrow(VIH)/6))
 ```
 
-Podemos verificar las dimensiones de las tres bases de datos con las que se va a trabajar
-```{r dimensiones Base de datos, echo=FALSE}
+Check the databases dimensions
+
+```{r, echo=FALSE}
 D <- c("VIH","VIH2","VIH3")
 N <-c(dim(VIH)[1],dim(VIH2)[1], dim(VIH3)[1])
 Nv <- c(dim(VIH)[2],dim(VIH2)[2], dim(VIH3)[2])
@@ -151,38 +138,38 @@ VIH_DF <- data.frame("DF" = D , "N_obs" = N, "N_var" = Nv, "N_miss" = M, "P_miss
 kable(VIH_DF)
 ```
 
-# Análisis de missings 
-## Análisis descriptivo de las bases de datos
+# Missing analysis 
+## Descriptive analysis
 
-Podemos observar el porcentaje de _missings_ de cada base de datos por variable
-```{r missing BDs}
-# Se obtiene el número de missings por variable
+Database´s missings percentage by variable
+```{r missing DBs}
+
 mv_1 <- data.frame(miss_var_summary(VIH))
 mv_2 <-data.frame(miss_var_summary(VIH2))
 mv_3 <-data.frame(miss_var_summary(VIH3))
-# Se unen las bases de datos
+
 mv_12 <- merge(mv_1,mv_2,by = "variable")
 mv_total <- merge(mv_12,mv_3,by = "variable")
-# Se selecciona las variables de interés y se ordena de forma decreciente
+
+# sort them by relevant variable 
 mv_var <- mv_total %>% select(variable, starts_with("pct"))
 colnames(mv_var) <- c("Variable","VIH","VIH2","VIH3")
 mv_var <- arrange(mv_var,desc(VIH))
 mv_var[-1] <- round(mv_var[-1],2)
-# Se guarda en formato latex
 kable(mv_var)
 ```
 
-```{r Comparacióm missings}
+```{r missings comparison}
 mv_var <- arrange(mv_var,Variable)
-# Porcentajes CD4A
+# CD4A percentage
 mv_var_cd4a <- mv_var[6:10,]
 mv_cd4 <- mv_var_cd4a %>% mutate(week = seq(0,48,12))
-# Porcentajes Carga viral
+# Carga_viral percentage
 mv_var_cv <- mv_var[1:5,]
 mv_cv <- mv_var_cv %>% mutate(week = seq(0,48,12))
 
 par(mfrow = c(1,2))
-# Gráfico de aumento de missings: variable CD4A en cada base de datos
+# Plot: CD4A variable missing % by time 
 plot(mv_cd4$week,mv_cd4$VIH, type = "b", pch = 18, col = "blue", xlab = "Semanas",
      ylab = "missings (%)", xlim = c(0,48), ylim = c(0,65), main = "Valor absoluto de CD4",
      xaxt = "n", cex.main = 2, cex.lab = 1.5, cex.axis = 1)
@@ -192,7 +179,7 @@ legend("topleft", legend=c("VIH", "VIH2", "VIH3"),
        col=c("blue","red","black"), lty = 1, cex=1.5)
 axis(1,at = seq(0,48,12))
 
-# Gráfico de aumento de missings: variable carga viral en cada base de datos
+# Plot: Carga_viral variable missing % by time
 plot(mv_cv$week,mv_cv$VIH, type = "b", pch = 18, col = "blue", xlab = "Semanas",
      ylab = "", xlim = c(0,48), ylim = c(0,65), main = "Log10 Carga viral de VIH", 
      xaxt = "n", cex.main = 2, cex.lab = 1.5, cex.axis = 1)
@@ -204,18 +191,17 @@ axis(1,at = seq(0,48,12))
 ```
 
 
-## Tipo de patrón de missing
+## Missing patterns
 
-Podemos realizar gráficos que nos permitan observar la presencia de patrones, así como representar el porcentaje de los mismos por cada varabie.
-
-```{r patron VIM}
-#Gráficos patrón utilizando el paquete "VIM"
+```{r pattern}
+#Patterns plots with the "VIM" package
 aggr(VIH, sortVars = T, prop = T, sortCombs = T,  cex.axis = 0.75, combined = T, axes = F)
 aggr(VIH2, sortVars = T, prop = T, sortCombs = T,  cex.axis = 0.75, combined = T, axes = F)
 aggr(VIH3, sortVars = T, prop = T, sortCombs = T,  cex.axis = 0.75, combined = T, axes = F)
 ```
 
-Se observa un patrón mixto, principalmente monotono pero con varios missings aleatorios. Mediante la función flux y fluxplot, podemos ver de forma más cuantitativa que patrón tenemos presente. 
+Through flux and fluxplot fuctions, It is possible to evaluate which pattern are in the database. For more information, please visit: https://stefvanbuuren.name/fimd/missing-data-pattern.html
+
 ```{r influx outflux}
 # Tabla de valores influx y outflux de cada variable
 flux(VIH)[,1:3]
@@ -223,7 +209,7 @@ flux(VIH2)[,1:3]
 flux(VIH3)[,1:3]
 ```
 
-```{r Grafico fluxplot}
+```{r fluxplot}
 par(mfrow = c(1,3))
 fluxplot(VIH, main = "VIH", labels = FALSE, cex.main = 2, cex.lab = 2, xlab = "")
 fluxplot(VIH2, main = "VIH2", labels = FALSE, cex.main = 2, cex.lab = 2, ylab = "")
@@ -231,19 +217,18 @@ fluxplot(VIH3, main = "VIH3", labels = FALSE, cex.main = 2, cex.lab = 2, ylab = 
          xlab = "")
 ```
 
-De acuerdo a la información que se tiene de la publicación, más los resultados obtenidos, se puede decir que el patrón de datos faltantes es _monotono_.
+The missing pattern is "monotone"
 
-## Mecanismos de missing
+## Missing mechanisms
 
 ```{r TestMCAR}
-# Test MCAR puesto en prueba para la base de datos VIH. Justificación en el escrito.
+# No normality MCAR test. Otherwise, use Little test.
 VIH %>% select("edad",tpo_vih_meses,starts_with("C"))  %>% TestMCARNormality()
 ```
 
-# Tratamiento de datos faltantes
+# Multiple imputation
 
-
-Se crea una función para ordenar las variables de acuerdo a sus registros temporales
+Fuction to sort dataset variable by time
 ```{r funcion orden_IM}
 # Función para ordenar variables temporales
 orden_IM <- function(x){
@@ -252,37 +237,37 @@ orden_IM <- function(x){
 }
 ```
 
-Aplicamos la función recién creada.
+Sorting the variables 
 ```{r orden BD}
-# Aplicación de la función 
 VIH <- orden_IM(VIH)
 VIH2 <- orden_IM(VIH2)
 VIH3 <- orden_IM(VIH3)
 ```
 
-## Sin método
-Para realizar la imputación múltiple, solo es necesario utilizar la función mice. Si no se especifica el método la función asigna un método acorde a cada tipo de variable.
-```{r mice sin método}
-# Imputación mútiple, utilizando MICE
+Next, I test three differents imputation options, all focus on PMM method
+
+## By default
+
+```{r mice by default}
 VIH_SM <- mice(VIH, m=3, maxit = 5, print = FALSE, seed = 457)
 VIH_SM2 <- mice(VIH2, m=3, maxit = 5, print = FALSE, seed = 457)
 VIH_SM3 <- mice(VIH3, m=3, maxit = 5,  print = FALSE, seed = 457)
 
-# Listado de eventos registrados (logged event)
+# Logged event
 VIH_SM3$loggedEvents
-# Tratamiento del logged event
-prep_SM <- VIH_SM3$pred  # Se obtiene la matriz predictora
-# Se modifican los predictores
+# Logged event treatment
+prep_SM <- VIH_SM3$pred  # Get the prediction matrix
+# Set the predictors
 prep_SM[6:14,"factor_riesgo_total"] <- 0
 prep_SM["CargaViral_48",c(1:4,7,9,13)] <- 1
-# Se utiliza la matriz predictora modificada
+# Use the custom prediction matrix
 VIH_SM3 <- mice(VIH3, m=3, maxit = 5, print = FALSE, pred = prep_SM,seed = 457)
 
-# Se puede observar que métodos fueron asignados por la función
+# Look out the methods used by default
 VIH_SM$method
 ```
 
-```{r Graficos_IM}
+```{r Plot_IM}
 densityplot(VIH_SM)
 stripplot(VIH_SM)
 densityplot(VIH_SM2)
@@ -291,31 +276,32 @@ densityplot(VIH_SM3)
 stripplot(VIH_SM3)
 ```
 
-```{r Añadir imputados}
+Add imputed values to each dataset
+```{r}
 VIH_SIM <- complete(VIH_SM)
 VIH_SIM2 <- complete(VIH_SM2)
 VIH_SIM3 <- complete(VIH_SM3)
 ```
 
 ## PMM
-Entre los métodos mas recomendados, esta el PMM (no parametrico, funciona con N pequeños y con variables categóricas y cuantitativas).
+
 ```{r mice pmm}
-# Imputación con el método PMM, utilizando MICE
+# This time we select the method PMM. All variables will treatment by PMM algorithm
 VIH_pmm <- mice(VIH, m=3, maxit = 5, method = "pmm", print = FALSE, seed = 457)
 VIH_pmm2 <- mice(VIH2, m=3, maxit = 5, method = "pmm", print = FALSE, seed = 457)
 VIH_pmm3 <- mice(VIH3, m=3, maxit = 5, method = "pmm", print = FALSE, seed = 457)
-# Listado de eventos registrados (logged event)
+# Logged event
 VIH_pmm3$loggedEvents
-# Tratamiento del logged event
+# Logged event treatment
 prep3 <- VIH_pmm3$pred
 prep3[6:14,"factor_riesgo_total"] <- 0
 prep3["CargaViral_48", c(1:4,7,9,13)] <- 1
-# Se utiliza la matriz predictora modificada
+
 VIH_pmm3 <- mice(VIH3, m=3, maxit = 5, method = "pmm", print = FALSE, 
                  pred = prep3,seed = 457)
 ```
 
-```{r Graficos_IM_pmm}
+```{r plot_IM_pmm}
 densityplot(VIH_pmm)
 stripplot(VIH_pmm)
 densityplot(VIH_pmm2)
@@ -324,35 +310,34 @@ densityplot(VIH_pmm3)
 stripplot(VIH_pmm3)
 ```
 
-```{r Añadir imputados pmm}
+```{r}
 VIH_IM <- complete(VIH_pmm)
 VIH_IM2 <- complete(VIH_pmm2)
 VIH_IM3 <- complete(VIH_pmm3)
 ```
 
-## Midastouch
+## Midastouch 
 
 ```{r mice midas}
 method <- c("","logreg","midastouch","midastouch","polyreg","midastouch","midastouch",
             "midastouch","midastouch","midastouch","midastouch","midastouch","midastouch",
             "midastouch","midastouch")
 
-# Imputación con el método PMM, utilizando MICE
 VIH_midas <- mice(VIH, m = 3, method = method, print = FALSE, seed = 457)
 VIH_midas2 <- mice(VIH2, m = 3, method = method, print = FALSE, seed = 457)
 VIH_midas3 <- mice(VIH3, m = 3, method = method, print = FALSE, seed = 457)
-# Listado de eventos registrados (logged event)
+# Logged event
 VIH_midas3$loggedEvents
-# Tratamiento del logged event
+# Logged event treatment 
 premi3 <- VIH_midas3$pred
 premi3[6:15,"factor_riesgo_total"] <- 0
 premi3["CargaViral_48", c(1:4,7,9,13)] <- 1
-# Se utiliza la matriz predictora modificada
+
 VIH_midas3 <- mice(VIH3, m = 3,method = method, print = FALSE, pred = premi3, seed = 457)
 ```
 
 
-```{r Graficos_IM_midas}
+```{r plot_IM_midas}
 densityplot(VIH_midas)
 stripplot(VIH_midas)
 densityplot(VIH_midas2)
@@ -361,37 +346,22 @@ densityplot(VIH_midas3)
 stripplot(VIH_midas3)
 ```
 
-```{r Añadir imputados midas}
+```{r}
 VIH_IMM <- complete(VIH_midas)
 VIH_IMM2 <- complete(VIH_midas2)
 VIH_IMM3 <- complete(VIH_midas3)
 ```
 
 
-# Comparación de resultados
+# Results
 
-Como repaso, mencionamos las bases de datos resultantes de las diferentes alternativas de imputación realizadas:
-- Alternativa 1 (por defecto)
-  - VIH_SIM
-  - VIH_SIM2
-  - VIH_SIM3
-- Alternativa 2 (PMM)
-  - VIH_IM
-  - VIH_IM2
-  - VIH_IM3
-- Alternativa 3 (Midastouch)
-  - VIH_IMM
-  - VIH_IMM2
-  - VIH_IMM3
+We reproduce the analize made by the dataset's publication, to compare if the results are the same or not.
 
-## Comparación de grupos de estudio 
-
-Realizamos la comparación de resultados por grupos de estudio de la semana 48. Dado que los datos no presentaban distribución normal, se aplica el test de U de Mann-Whitney. 
-
-Para ello se utiliza la función wilcox_test del paquete _coin_ dentro de una función creada especificamente para obtener los valores mencionados. 
+Use the Mann-Whitney test to compare the variable "group"
+ 
 ```{r funcion test}
 test <- function(variable,grupo){
-  # Test para obtener el valor p exacto
+
   x <- wilcox_test(variable ~ grupo,conf.int = TRUE, distribution = "exact")
   # Valor p
   p <- pvalue(x)
@@ -403,42 +373,39 @@ test <- function(variable,grupo){
 }
 ```
 
-Se aplica la función para las dos variables de interés. 
-
 ### CD4A
-```{r Variable CD4A_48}
-# Alternativa 1 Por defecto
+```{r}
+# By default
 U_SIM_CD <- test(VIH_SIM$CD4A_48,VIH_SIM$Grupo)
 U_SIM2_CD <- test(VIH_SIM2$CD4A_48,VIH_SIM2$Grupo)
 U_SIM3_CD <- test(VIH_SIM3$CD4A_48,VIH_SIM3$Grupo)
-# Alternativa 2 PMM
+# PMM
 U_IM_CD <- test(VIH_IM$CD4A_48,VIH_IM$Grupo)
 U_IM2_CD <- test(VIH_IM2$CD4A_48,VIH_IM2$Grupo)
 U_IM3_CD <- test(VIH_IM3$CD4A_48,VIH_IM3$Grupo)
-# Alternativa 3 Midastouch
+# Midastouch
 U_IMM_CD <- test(VIH_IMM$CD4A_48,VIH_IMM$Grupo)
 U_IMM2_CD <- test(VIH_IMM2$CD4A_48,VIH_IMM2$Grupo)
 U_IMM3_CD <- test(VIH_IMM3$CD4A_48,VIH_IMM3$Grupo)
 ```
 
-### Carga Viral 48
-```{r Variable CargaViral_48}
-# Alternativa 1 Por defecto
+### Carga_viral
+```{r CargaViral_48 Variable}
+# By default
 U_SIM_CV <- test(VIH_SIM$CargaViral_48,VIH_SIM$Grupo)
 U_SIM2_CV <- test(VIH_SIM2$CargaViral_48,VIH_SIM2$Grupo)
 U_SIM3_CV <- test(VIH_SIM3$CargaViral_48,VIH_SIM3$Grupo)
-# Alternativa 2 PMM
+# PMM
 U_IM_CV <- test(VIH_IM$CargaViral_48,VIH_IM$Grupo)
 U_IM2_CV <- test(VIH_IM2$CargaViral_48,VIH_IM2$Grupo)
 U_IM3_CV <- test(VIH_IM3$CargaViral_48,VIH_IM3$Grupo)
-# Alternativa 3 Midastouch
+# Midastouch
 U_IMM_CV <- test(VIH_IMM$CargaViral_48,VIH_IMM$Grupo)
 U_IMM2_CV <- test(VIH_IMM2$CargaViral_48,VIH_IMM2$Grupo)
 U_IMM3_CV <- test(VIH_IMM3$CargaViral_48,VIH_IMM3$Grupo)
 ```
 
-### Comparación valores
-```{r tabla resultados}
+```{r}
 res_cd <- data.frame(t(data.frame("VIH_defecto" = U_SIM_CD, "VIH2_defecto" = U_SIM2_CD,
                                   "VIH3_defecto" = U_SIM3_CD, "VIH_PMM" = U_IM_CD, 
                                   "VIH2_PMM" = U_IM2_CD, "VIH3_PMM" = U_IM3_CD, 
